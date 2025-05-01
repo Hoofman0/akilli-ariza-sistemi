@@ -17,20 +17,20 @@ function DashboardPage() {
       const users = await axios.get("http://localhost:5000/users");
       const machines = await axios.get("http://localhost:5000/machines");
       const faults = await axios.get("http://localhost:5000/faults");
-
+  
       setUserCount(users.data.length);
       setMachineCount(machines.data.length);
       setFaultCount(faults.data.length);
-
-      const resolved = faults.data.filter(fault => fault.status === "çözüldü").length;
+  
+      const resolved = faults.data.filter(fault => fault.status === "resolved").length;
       const open = faults.data.filter(fault => fault.status === "arızalı").length;
-
+  
       setResolvedFaultCount(resolved);
       setOpenFaultCount(open);
     } catch (error) {
       console.error("Dashboard verileri çekilemedi:", error);
     }
-  };
+  };  
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", marginTop: "40px", gap: "20px" }}>

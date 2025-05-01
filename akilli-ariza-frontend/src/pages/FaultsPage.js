@@ -79,15 +79,21 @@ function FaultsPage() {
       }
 
       await axios.patch(`http://localhost:5000/faults/${id}`, {
-        status: "çözüldü",
-        resolved_by: resolverId
+        status: "resolved",
+        resolved_by: resolverId,
       });
+
       fetchFaults();
       toast.success("Arıza başarıyla çözüldü! 🎯");
     } catch (error) {
       console.error("Arıza çözülemedi:", error);
       toast.error("Arıza çözümünde hata oluştu ❌");
     }
+  };
+
+  const getResolverName = (id) => {
+    const resolver = users.find(user => user.id === id);
+    return resolver ? resolver.name : "Bilinmiyor";
   };
 
   return (
@@ -132,67 +138,85 @@ function FaultsPage() {
             flexDirection: "column",
             alignItems: "center"
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "scale(1.05)";
-            e.currentTarget.style.boxShadow = "0 6px 12px rgba(0,0,0,0.15)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "scale(1)";
-            e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.1)";
-          }}
-          
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.05)";
+              e.currentTarget.style.boxShadow = "0 6px 12px rgba(0,0,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.1)";
+            }}
           >
             <h3 style={{ margin: "10px 0" }}>Makine ID: {fault.machine_id}</h3>
             <p style={{ margin: "5px 0" }}>{fault.description}</p>
-            <p style={{ margin: "5px 0" }}>Durum: {fault.status}</p>
+            <p style={{ margin: "5px 0" }}>Durum: {fault.status === "resolved" ? "çözüldü" : fault.status}</p>
             {fault.resolved_at && (
               <p style={{ margin: "5px 0", fontSize: "12px", color: "#888" }}>
                 Çözüm Tarihi: {new Date(fault.resolved_at).toLocaleString()}
               </p>
             )}
 
-            <select
-              value={resolverMap[fault.id] || ""}
-              onChange={(e) => setResolverMap({ ...resolverMap, [fault.id]: e.target.value })}
-              style={{
-                padding: "8px",
-                borderRadius: "5px",
-                border: "1px solid #ccc",
-                marginTop: "10px"
-              }}
-            >
-              <option value="">Çözecek kullanıcı seç</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name}
-                </option>
-              ))}
-            </select>
+            {fault.status !== "resolved" ? (
+              <>
+                <select
+                  value={resolverMap[fault.id] || ""}
+                  onChange={(e) => setResolverMap({ ...resolverMap, [fault.id]: e.target.value })}
+                  style={{
+                    padding: "8px",
+                    borderRadius: "5px",
+                    border: "1px solid #ccc",
+                    marginTop: "10px"
+                  }}
+                >
+                  <option value="">Çözecek kullanıcı seç</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
 
-            <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-              {fault.status === "arızalı" && (
-                <button onClick={() => resolveFault(fault.id)} style={{
-                  backgroundColor: "#3498db",
+                <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                  <button onClick={() => resolveFault(fault.id)} style={{
+                    backgroundColor: "#3498db",
+                    color: "#ffffff",
+                    border: "none",
+                    padding: "8px 16px",
+                    borderRadius: "5px",
+                    cursor: "pointer"
+                  }}>
+                    Çöz
+                  </button>
+                  <button onClick={() => deleteFault(fault.id)} style={{
+                    backgroundColor: "#f44336",
+                    color: "#ffffff",
+                    border: "none",
+                    padding: "8px 16px",
+                    borderRadius: "5px",
+                    cursor: "pointer"
+                  }}>
+                    Sil
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ marginTop: "10px", fontWeight: "bold", color: "#2c3e50" }}>
+                  Bu arıza <span style={{ color: "#27ae60" }}>{getResolverName(fault.resolved_by)}</span> tarafından çözüldü.
+                </p>
+                <button onClick={() => deleteFault(fault.id)} style={{
+                  marginTop: "10px",
+                  backgroundColor: "#f44336",
                   color: "#ffffff",
                   border: "none",
                   padding: "8px 16px",
                   borderRadius: "5px",
                   cursor: "pointer"
                 }}>
-                  Çöz
+                  Sil
                 </button>
-              )}
-              <button onClick={() => deleteFault(fault.id)} style={{
-                backgroundColor: "#f44336",
-                color: "#ffffff",
-                border: "none",
-                padding: "8px 16px",
-                borderRadius: "5px",
-                cursor: "pointer"
-              }}>
-                Sil
-              </button>
-            </div>
+              </>
+            )}
           </div>
         ))}
       </div>

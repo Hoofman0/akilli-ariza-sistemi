@@ -1,26 +1,71 @@
 // index.js
+
 const express = require("express");
 const cors = require("cors");
+const bcrypt = require("bcrypt"); // veya bcryptjs
+const jwt = require("jsonwebtoken");
 const pool = require("./db");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Middlewareler (En üste yazılır)
 app.use(cors());
 app.use(express.json());
 
-// Test endpoint – DB bağlantısını test eder
-app.get("/test", async (req, res) => {
-    try {
-      const result = await pool.query("SELECT NOW()");
-      res.json({ success: true, time: result.rows[0] });
-    } catch (err) {
-      console.error("🔴 HATA:", err);
-      res.status(500).json({ success: false, message: err.message });
+// Sabitler
+const SECRET_KEY = "gizli_sifremiz"; // (Gerçek projede güçlü bir key kullanılır.)
+
+// --- Kullanıcı Kayıt (REGISTER) ---
+app.post("/register", async (req, res) => {
+  const { name, email, password, role } = req.body;
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      "INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING *",
+      [name, email, hashedPassword, role]
+    );
+
+    res.status(201).json({ message: "Kayıt başarılı!" });
+  } catch (error) {
+    console.error("🔴 HATA:", error.message);
+    if (error.code === "23505") {
+      res.status(400).json({ message: "Bu email zaten kayıtlı!" });
+    } else {
+      res.status(500).json({ message: "Sunucu hatası oluştu." });
     }
-  });
-  
-// Tüm kullanıcıları getir
+  }
+});
+
+// --- Kullanıcı Giriş (LOGIN) ---
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: "Email bulunamadı!" });
+    }
+
+    const user = result.rows[0];
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(400).json({ message: "Şifre yanlış!" });
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, { expiresIn: '1h' });
+
+    res.json({ message: "Giriş başarılı!", token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Sunucu hatası oluştu." });
+  }
+});
+
+// --- Kullanıcıları Listeleme ---
 app.get("/users", async (req, res) => {
   try {
     const allUsers = await pool.query("SELECT * FROM users ORDER BY id ASC");
@@ -31,46 +76,26 @@ app.get("/users", async (req, res) => {
   }
 });
 
-// Yeni kullanıcı ekle
-app.post('/users', async (req, res) => {
+// --- Yeni Kullanıcı Ekleme ---
+app.post("/users", async (req, res) => {
   try {
     const { name, role, email, phone } = req.body;
     const result = await pool.query(
-      'INSERT INTO users (name, role, email, phone) VALUES ($1, $2, $3, $4) RETURNING *',
+      "INSERT INTO users (name, role, email, phone) VALUES ($1, $2, $3, $4) RETURNING *",
       [name, role, email, phone]
     );
     res.json(result.rows[0]);
   } catch (error) {
-    console.error("Veritabanı Hatası:", error);
-
-    if (error.code === '23505') {
-      // Duplicate Email Hatası
-      res.status(400).json({ message: "Bu email adresi zaten kayıtlı! ❌" });
+    console.error(error);
+    if (error.code === "23505") {
+      res.status(400).json({ message: "Bu email adresi zaten kayıtlı!" });
     } else {
-      // Diğer Hatalar
-      res.status(500).json({ message: "Sunucu hatası oluştu ❌" });
+      res.status(500).json({ message: "Sunucu hatası oluştu" });
     }
   }
 });
 
-
-
-//kullanıcı ekleme başarılı/hatalı
-const handleUserSubmit = async (e) => {
-  e.preventDefault();
-  try {
-    await axios.post("http://localhost:5000/users", userForm);
-    setUserForm({ name: "", role: "", email: "", phone: "" });
-    fetchUsers();
-    toast.success("Kullanıcı başarıyla eklendi!");
-  } catch (error) {
-    console.error("Kullanıcı eklenemedi:", error);
-    toast.error("Kullanıcı eklenemedi!");
-  }
-};
-
-
-//makineleri listeleme
+// --- Makine CRUD ---
 app.get("/machines", async (req, res) => {
   try {
     const allMachines = await pool.query("SELECT * FROM machines ORDER BY id ASC");
@@ -81,7 +106,6 @@ app.get("/machines", async (req, res) => {
   }
 });
 
-//yeni makine ekleme
 app.post("/machines", async (req, res) => {
   try {
     const { name, type, status, location } = req.body;
@@ -96,22 +120,7 @@ app.post("/machines", async (req, res) => {
   }
 });
 
-//Makine Ekleme Başarılı / Hatalı
-const handleMachineSubmit = async (e) => {
-  e.preventDefault();
-  try {
-    await axios.post("http://localhost:5000/machines", machineForm);
-    setMachineForm({ name: "", type: "", status: "", location: "" });
-    fetchMachines();
-    toast.success("Makine başarıyla eklendi!");
-  } catch (error) {
-    console.error("Makine eklenemedi:", error);
-    toast.error("Makine eklenemedi!");
-  }
-};
-
-
-//tüm arızaları listeleme
+// --- Arıza CRUD ---
 app.get("/faults", async (req, res) => {
   try {
     const allFaults = await pool.query("SELECT * FROM faults ORDER BY id ASC");
@@ -122,7 +131,6 @@ app.get("/faults", async (req, res) => {
   }
 });
 
-//yeni arıza kaydı ekleme
 app.post("/faults", async (req, res) => {
   try {
     const { machine_id, description, status, resolved_by } = req.body;
@@ -137,6 +145,43 @@ app.post("/faults", async (req, res) => {
   }
 });
 
+// Kullanıcı silme (DELETE)
+app.delete("/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    res.json({ success: true, message: "Kullanıcı silindi." });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Makine Silme
+app.delete("/machines/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM machines WHERE id = $1", [id]);
+    res.json({ success: true, message: "Makine silindi." });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Arıza Silme
+app.delete("/faults/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query("DELETE FROM faults WHERE id = $1", [id]);
+    res.json({ success: true, message: "Arıza kaydı silindi." });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Arıza Çözme (PATCH /faults/:id)
 app.patch("/faults/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -150,130 +195,12 @@ app.patch("/faults/:id", async (req, res) => {
 
     res.json(updatedFault.rows[0]);
   } catch (err) {
-    console.error(err.message);
+    console.error("Arıza çözüm hatası:", err.message);
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-
-
-//Arıza Ekleme Başarılı / Hatalı
-const handleFaultSubmit = async (e) => {
-  e.preventDefault();
-  try {
-    await axios.post("http://localhost:5000/faults", faultForm);
-    setFaultForm({ machine_id: "", description: "", status: "open" });
-    fetchFaults();
-    toast.success("Arıza başarıyla kaydedildi!");
-  } catch (error) {
-    console.error("Arıza eklenemedi:", error);
-    toast.error("Arıza kaydı yapılamadı!");
-  }
-};
-
-//Arıza Çözme Başarılı / Hatalı
-const resolveFault = async (id) => {
-  try {
-    await axios.patch(`http://localhost:5000/faults/${id}`, {
-      status: "resolved",
-      resolved_by: null
-    });
-    fetchFaults();
-    toast.success("Arıza başarıyla çözüldü! 🎯");
-  } catch (error) {
-    console.error("Arıza çözülemedi:", error);
-    toast.error("Arıza çözümünde hata oluştu ❌");
-  }
-};
-
-
-
-
-// Belirli bir kullanıcıyı ID'sine göre siler
-app.delete("/users/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const deleteUser = await pool.query("DELETE FROM users WHERE id = $1", [id]);
-    res.json({ success: true, message: "Kullanıcı silindi." });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Belirli bir makineyi ID'sine göre siler
-app.delete("/machines/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const deleteMachine = await pool.query("DELETE FROM machines WHERE id = $1", [id]);
-    res.json({ success: true, message: "Makine silindi." });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Belirli bir arıza kaydını ID'sine göre siler
-app.delete("/faults/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const deleteFault = await pool.query("DELETE FROM faults WHERE id = $1", [id]);
-    res.json({ success: true, message: "Arıza kaydı silindi." });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Belirli bir kullanıcının bilgilerini ID'sine göre günceller
-app.put("/users/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, role, email, phone } = req.body;
-    const updateUser = await pool.query(
-      "UPDATE users SET name = $1, role = $2, email = $3, phone = $4 WHERE id = $5 RETURNING *",
-      [name, role, email, phone, id]
-    );
-    res.json(updateUser.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Belirli bir makinenin bilgilerini ID'sine göre günceller
-app.put("/machines/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, type, status, location } = req.body;
-    const updateMachine = await pool.query(
-      "UPDATE machines SET name = $1, type = $2, status = $3, location = $4 WHERE id = $5 RETURNING *",
-      [name, type, status, location, id]
-    );
-    res.json(updateMachine.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// Belirli bir arıza kaydını ID'sine göre günceller
-app.put("/faults/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { description, status, resolved_by } = req.body;
-    const updateFault = await pool.query(
-      "UPDATE faults SET description = $1, status = $2, resolved_by = $3 WHERE id = $4 RETURNING *",
-      [description, status, resolved_by, id]
-    );
-    res.json(updateFault.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-
+// --- Sunucu Başlat ---
 app.listen(PORT, () => {
   console.log(`🚀 Sunucu ${PORT} portunda çalışıyor...`);
 });
