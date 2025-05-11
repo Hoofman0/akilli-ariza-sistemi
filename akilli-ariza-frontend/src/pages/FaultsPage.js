@@ -148,7 +148,15 @@ function FaultsPage() {
             }}
           >
             <h3 style={{ margin: "10px 0" }}>Makine ID: {fault.machine_id}</h3>
-            <p style={{ margin: "5px 0" }}>{fault.description}</p>
+            <p style={{ 
+              margin: "5px 0", 
+              textAlign: "center", 
+              fontWeight: fault.description.includes("otomatik") ? "bold" : "normal", 
+              color: fault.description.includes("otomatik") ? "#e74c3c" : "black" 
+              }}>
+              {fault.description}
+            </p>
+
             <p style={{ margin: "5px 0" }}>Durum: {fault.status === "resolved" ? "çözüldü" : fault.status}</p>
             {fault.resolved_at && (
               <p style={{ margin: "5px 0", fontSize: "12px", color: "#888" }}>

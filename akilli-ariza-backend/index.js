@@ -200,6 +200,62 @@ app.patch("/faults/:id", async (req, res) => {
   }
 });
 
+// Yeni sıcaklık verisi ekleme (ESP8266'dan veri alımı)
+app.post("/temperatures", async (req, res) => {
+  const { machine_id, temperature } = req.body;
+
+  try {
+    //sıcaklık verisi kaydetme 
+    const result = await pool.query(
+      "INSERT INTO machine_temperatures (machine_id, temperature) VALUES ($1, $2) RETURNING *",
+      [machine_id, temperature]
+    );
+
+    //otomatik arıza talebi kodu
+    if (temperature >= 25) {
+      const kontrol = await pool.query(
+        "SELECT * FROM faults WHERE machine_id = $1 AND status = 'arızalı'",
+        [machine_id]
+      );
+
+      if (kontrol.rowCount === 0) {
+        await pool.query(
+          "INSERT INTO faults (machine_id, description, status) VALUES ($1, $2, $3)",
+          [machine_id, "Sıcaklık 25°C'yi geçti! Otomatik arıza oluşturuldu.", "arızalı"]
+        );
+        console.log(`🔥 Makine ${machine_id} için otomatik arıza oluşturuldu!`);
+      }
+    }
+
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error("Sıcaklık ekleme hatası:", error);
+    res.status(500).json({ success: false, message: "Sunucu hatası oluştu." });
+  }
+});
+
+
+// Her makinenin en son sıcaklık verisini getir
+app.get("/temperatures/latest", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT mt.machine_id, mt.temperature
+      FROM machine_temperatures mt
+      INNER JOIN (
+        SELECT machine_id, MAX(recorded_at) AS latest
+        FROM machine_temperatures
+        GROUP BY machine_id
+      ) latest_temps
+      ON mt.machine_id = latest_temps.machine_id AND mt.recorded_at = latest_temps.latest
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Sıcaklık çekme hatası:", error);
+    res.status(500).json({ success: false, message: "Sunucu hatası oluştu." });
+  }
+});
+
 // --- Sunucu Başlat ---
 app.listen(PORT, () => {
   console.log(`🚀 Sunucu ${PORT} portunda çalışıyor...`);

@@ -5,10 +5,18 @@ import { toast } from "react-toastify";
 function MachinesPage() {
   const [machines, setMachines] = useState([]);
   const [machineForm, setMachineForm] = useState({ name: "", type: "", status: "", location: "" });
+  const [temperatureMap, setTemperatureMap] = useState({}); // 🔥 Sıcaklıklar buraya gelecek
 
   useEffect(() => {
     fetchMachines();
-  }, []);
+    fetchTemperatures();
+  
+    const interval = setInterval(() => {
+      fetchTemperatures(); // Her 5 saniyede sıcaklıkları güncelle
+    }, 5000);
+  
+    return () => clearInterval(interval); // Sayfa kapatılırsa interval temizlensin
+  }, []);  
 
   const fetchMachines = async () => {
     try {
@@ -18,6 +26,19 @@ function MachinesPage() {
       console.error("Makineler çekilemedi:", error);
     }
   };
+
+  const fetchTemperatures = async () => {
+    try {
+      const response = await axios.get("http://localhost:5000/temperatures/latest");
+      const map = {};
+      response.data.forEach(temp => {
+        map[temp.machine_id] = temp.temperature;
+      });
+      setTemperatureMap(map);
+    } catch (error) {
+      console.error("Sıcaklıklar çekilemedi:", error);
+    }
+  };  
 
   const handleMachineInputChange = (e) => {
     setMachineForm({ ...machineForm, [e.target.name]: e.target.value });
@@ -87,13 +108,14 @@ function MachinesPage() {
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "scale(1)";
             e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.1)";
-          }}
-          
-          >
+          }}>
             <h3 style={{ margin: "10px 0" }}>{machine.name}</h3>
-            <p style={{ margin: "5px 0" }}>Tip: {machine.type}</p>
-            <p style={{ margin: "5px 0" }}>Durum: {machine.status}</p>
-            <p style={{ margin: "5px 0" }}>Lokasyon: {machine.location}</p>
+            <p>Tip: {machine.type}</p>
+            <p>Durum: {machine.status}</p>
+            <p>Lokasyon: {machine.location}</p>
+            <p style={{ color: "#e67e22", fontWeight: "bold" }}>
+              🔥 Sıcaklık: {temperatureMap[machine.id] !== undefined ? `${temperatureMap[machine.id]}°C` : "Veri yok"}
+            </p>
             <button onClick={() => deleteMachine(machine.id)} style={{
               marginTop: "10px",
               backgroundColor: "#f44336",
